@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistem Informasi Statistik Kota Medan</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynhQ6fGxMZqWe2p3u7DPxE7wsLqA=" crossorigin="">
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; background:#f3f5f7; margin:0; color:#222; }
+  .page { width:min(1180px,96%); margin:24px auto; border:1px solid #777; background:#fff; }
+  .topbar { text-align:right; padding:8px 14px; border-bottom:1px solid #777; background:#fafafa; }
+  .header { display:flex; align-items:center; gap:18px; padding:18px 22px; border-bottom:1px solid #777; }
+  .logo { width:82px; height:92px; border-radius:12px; background:#0b6b3a; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; text-align:center; line-height:1.2; box-shadow:inset 0 0 0 4px #f0c84b; }
+  .header-title { flex:1; text-align:center; }
+  .header-title h1 { margin:0; font-size:32px; }
+  .header-title h2 { margin:5px 0 0; font-size:24px; font-style:italic; font-weight:600; }
+  .content { display:grid; grid-template-columns:180px 1fr; min-height:560px; }
+  .menu { padding:16px; border-right:1px solid #777; line-height:1.8; background:#fbfbfb; }
+  .menu b { color:#0b6b3a; }
+  .main { padding:16px; min-width:0; }
+  .main h3 { text-align:center; margin:0 0 10px; }
+  .note { font-size:12px; color:#555; margin:0 0 12px; text-align:center; }
+  .table-wrap { overflow:auto; max-height:570px; border:1px solid #aaa; }
+  table.data { border-collapse:collapse; width:100%; font-size:14px; }
+  table.data th, table.data td { border:1px solid #999; padding:6px 8px; }
+  table.data th { position:sticky; top:0; background:#eaf3ee; z-index:1; }
+  table.data td.num { text-align:right; white-space:nowrap; }
+  table.data tr:hover { background:#fff8d6; cursor:pointer; }
+  .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0; }
+  .card { border:1px solid #bbb; padding:10px; background:#fafafa; text-align:center; }
+  .card strong { display:block; font-size:20px; color:#0b6b3a; margin-top:4px; }
+  .map-title { margin:20px 0 8px; font-weight:700; text-align:center; }
+  #map { height:480px; border:1px solid #888; }
+  .legend { background:white; padding:8px 10px; border:1px solid #aaa; line-height:1.55; font-size:12px; }
+  .legend i { display:inline-block; width:12px; height:12px; margin-right:6px; vertical-align:-1px; border-radius:50%; }
+  .footer { text-align:center; padding:18px; border-top:1px solid #777; line-height:1.5; }
+  .source { margin-top:12px; font-size:12px; color:#555; }
+  @media (max-width:760px){
+    .content{grid-template-columns:1fr}.menu{border-right:0;border-bottom:1px solid #777}.header{flex-direction:column}.summary{grid-template-columns:1fr}.header-title h1{font-size:25px}.header-title h2{font-size:20px}#map{height:400px}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar"><a href="#">login</a></div>
+
+  <div class="header">
+    <div class="logo" aria-label="Identitas Kota Medan">KOTA<br>MEDAN</div>
+    <div class="header-title">
+      <h1>SISTEM INFORMASI STATISTIK</h1>
+      <h2>KOTA MEDAN</h2>
+    </div>
+  </div>
+
+  <div class="content">
+    <aside class="menu">
+      <b>Penduduk</b><br>
+      Geografi dan Iklim<br>
+      Pemerintahan<br>
+      Sosial<br>
+      Pertanian<br>
+      Industri<br>
+      Pariwisata dan<br>
+      Keuangan
+    </aside>
+
+    <main class="main">
+      <h3>Tabel Jumlah dan Kepadatan Penduduk Kota Medan</h3>
+      <p class="note">Data tahun 2024, diterbitkan dalam <i>Kota Medan Dalam Angka 2025</i>. Klik baris kecamatan untuk menyorot lokasinya pada peta.</p>
+
+      <div class="summary">
+        <div class="card">Jumlah Kecamatan<strong>21</strong></div>
+        <div class="card">Jumlah Penduduk<strong>2.486.283 jiwa</strong></div>
+        <div class="card">Kepadatan Kota<strong>8.817 jiwa/km²</strong></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data" id="populationTable">
+          <thead>
+            <tr>
+              <th>Kecamatan</th>
+              <th>Luas Wilayah<br>(km²)</th>
+              <th>Jumlah Penduduk<br>(jiwa)</th>
+              <th>Kepadatan Penduduk<br>(jiwa/km²)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="map-title">Peta Interaktif Kepadatan Penduduk Kota Medan</div>
+      <p class="note">Lingkaran menunjukkan titik pusat perkiraan tiap kecamatan; ukuran dan warna mengikuti kepadatan penduduk. Peta dasar: OpenStreetMap.</p>
+      <div id="map"></div>
+      <div class="source">
+        <b>Sumber data:</b> Badan Pusat Statistik Kota Medan, <i>Kota Medan Dalam Angka 2025</i> (data penduduk dan kepadatan 2024). Luas dihitung dari jumlah penduduk ÷ kepadatan sehingga dapat berbeda sedikit karena pembulatan publikasi. Titik peta digunakan untuk visualisasi interaktif, bukan batas administrasi resmi.
+      </div>
+    </main>
+  </div>
+
+  <div class="footer">
+    <b>Pemerintah Kota Medan</b><br>
+    Jl. Kapten Maulana Lubis No. 2, Medan, Sumatera Utara
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const data = [
+  {name:'Medan Tuntungan', area:25.15, pop:101069, density:4018, lat:3.541, lng:98.603},
+  {name:'Medan Johor', area:16.73, pop:155854, density:9316, lat:3.548, lng:98.675},
+  {name:'Medan Amplas', area:10.65, pop:132403, density:12433, lat:3.544, lng:98.715},
+  {name:'Medan Denai', area:9.37, pop:172581, density:18419, lat:3.575, lng:98.724},
+  {name:'Medan Area', area:4.24, pop:118352, density:27914, lat:3.580, lng:98.700},
+  {name:'Medan Kota', area:5.75, pop:84779, density:14745, lat:3.574, lng:98.687},
+  {name:'Medan Maimun', area:3.02, pop:49847, density:16506, lat:3.575, lng:98.679},
+  {name:'Medan Polonia', area:8.77, pop:60910, density:6946, lat:3.566, lng:98.662},
+  {name:'Medan Baru', area:5.43, pop:36066, density:6642, lat:3.579, lng:98.658},
+  {name:'Medan Selayang', area:16.45, pop:104425, density:6349, lat:3.570, lng:98.622},
+  {name:'Medan Sunggal', area:13.26, pop:134650, density:10155, lat:3.596, lng:98.618},
+  {name:'Medan Helvetia', area:13.05, pop:169363, density:12979, lat:3.615, lng:98.634},
+  {name:'Medan Petisah', area:5.28, pop:72599, density:13750, lat:3.596, lng:98.662},
+  {name:'Medan Barat', area:6.34, pop:89427, density:14106, lat:3.603, lng:98.672},
+  {name:'Medan Timur', area:8.89, pop:117002, density:13162, lat:3.611, lng:98.690},
+  {name:'Medan Perjuangan', area:4.54, pop:105778, density:23300, lat:3.606, lng:98.704},
+  {name:'Medan Tembung', area:7.85, pop:150135, density:19126, lat:3.602, lng:98.720},
+  {name:'Medan Deli', area:18.83, pop:192476, density:10222, lat:3.653, lng:98.681},
+  {name:'Medan Labuhan', area:35.08, pop:136190, density:3882, lat:3.724, lng:98.683},
+  {name:'Medan Marelan', area:30.03, pop:191765, density:6386, lat:3.698, lng:98.644},
+  {name:'Medan Belawan', area:33.27, pop:110612, density:3325, lat:3.785, lng:98.690}
+];
+
+const tbody = document.querySelector('#populationTable tbody');
+const idFmt = new Intl.NumberFormat('id-ID');
+const decFmt = new Intl.NumberFormat('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+data.forEach((d, i) => {
+  const tr = document.createElement('tr');
+  tr.dataset.index = i;
+  tr.innerHTML = `<td>${d.name}</td><td class="num">${decFmt.format(d.area)}</td><td class="num">${idFmt.format(d.pop)}</td><td class="num">${idFmt.format(d.density)}</td>`;
+  tbody.appendChild(tr);
+});
+
+const map = L.map('map', {scrollWheelZoom:true}).setView([3.63, 98.68], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+function densityColor(v){
+  if(v >= 20000) return '#9b1c1c';
+  if(v >= 15000) return '#d44a2a';
+  if(v >= 10000) return '#e68a2e';
+  if(v >= 7000) return '#d6b63c';
+  if(v >= 5000) return '#7aa65a';
+  return '#2f7d5a';
+}
+
+const markers = [];
+data.forEach((d, i) => {
+  const radius = Math.max(8, Math.min(23, 7 + d.density / 1800));
+  const marker = L.circleMarker([d.lat, d.lng], {
+    radius,
+    color:'#333', weight:1, fillColor:densityColor(d.density), fillOpacity:0.82
+  }).addTo(map);
+  marker.bindPopup(`<b>${d.name}</b><br>Jumlah penduduk: ${idFmt.format(d.pop)} jiwa<br>Luas: ${decFmt.format(d.area)} km²<br>Kepadatan: <b>${idFmt.format(d.density)} jiwa/km²</b>`);
+  marker.on('click', () => selectRow(i));
+  markers.push(marker);
+});
+
+function selectRow(i){
+  document.querySelectorAll('#populationTable tbody tr').forEach(r => r.style.background='');
+  const row = document.querySelector(`#populationTable tbody tr[data-index="${i}"]`);
+  if(row){ row.style.background='#fff0a8'; row.scrollIntoView({block:'nearest', behavior:'smooth'}); }
+  map.flyTo([data[i].lat, data[i].lng], 13, {duration:0.6});
+  markers[i].openPopup();
+}
+
+document.querySelectorAll('#populationTable tbody tr').forEach(row => {
+  row.addEventListener('click', () => selectRow(Number(row.dataset.index)));
+});
+
+const legend = L.control({position:'bottomright'});
+legend.onAdd = function(){
+  const div = L.DomUtil.create('div','legend');
+  div.innerHTML = '<b>Kepadatan (jiwa/km²)</b><br>' +
+    '<i style="background:#2f7d5a"></i>&lt; 5.000<br>' +
+    '<i style="background:#7aa65a"></i>5.000–6.999<br>' +
+    '<i style="background:#d6b63c"></i>7.000–9.999<br>' +
+    '<i style="background:#e68a2e"></i>10.000–14.999<br>' +
+    '<i style="background:#d44a2a"></i>15.000–19.999<br>' +
+    '<i style="background:#9b1c1c"></i>≥ 20.000';
+  return div;
+};
+legend.addTo(map);
+
+L.control.scale({imperial:false}).addTo(map);
+</script>
+</body>
+</html>
