@@ -141,75 +141,106 @@ data.forEach((d, i) => {
   tbody.appendChild(tr);
 });
 
-const map = L.map('map', {scrollWheelZoom:true}).setView([3.63, 98.68], 11);
+
+const map = L.map('map', {
+  scrollWheelZoom: true,
+  zoomControl: true,
+  preferCanvas: true
+}).setView([3.595, 98.672], 11);
+
 const mapStatus = document.getElementById('mapStatus');
-// Peta dasar OpenStreetMap, seperti contoh yang dikirim.
-// Gunakan satu layer saja agar tidak membebani server tile.
-const baseMap = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-  updateWhenIdle: true,
-  keepBuffer: 2
-}).addTo(map);
-let tileLoaded = false;
-baseMap.on('tileload', () => {
-  tileLoaded = true;
-  mapStatus.textContent = 'Peta berhasil dimuat. Klik lingkaran atau baris kecamatan untuk melihat detail.';
-});
-baseMap.on('tileerror', () => {
-  if (!tileLoaded) mapStatus.textContent = 'Peta dasar gagal dimuat. Periksa koneksi internet, VPN, atau firewall, lalu muat ulang halaman.';
-});
-map.whenReady(() => setTimeout(() => map.invalidateSize(), 300));
-window.addEventListener('resize', () => map.invalidateSize());
 
-function densityColor(v){
-  if(v >= 20000) return '#9b1c1c';
-  if(v >= 15000) return '#d44a2a';
-  if(v >= 10000) return '#e68a2e';
-  if(v >= 7000) return '#d6b63c';
-  if(v >= 5000) return '#7aa65a';
-  return '#2f7d5a';
+// Peta utama: Esri World Street Map
+const esriMap = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  {
+    maxZoom: 19,
+    attribution: 'Tiles &copy; Esri',
+    keepBuffer: 2
+  }
+);
+
+// Peta cadangan: OpenStreetMap
+const osmMap = L.tileLayer(
+  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+    keepBuffer: 2
+  }
+);
+
+let activeLayer = esriMap;
+let tileSuccess = false;
+let errorCount = 0;
+let fallbackUsed = false;
+
+function updateMapStatus(message) {
+  if (mapStatus) {
+    mapStatus.textContent = message;
+  }
 }
 
-const markers = [];
-data.forEach((d, i) => {
-  const radius = Math.max(8, Math.min(23, 7 + d.density / 1800));
-  const marker = L.circleMarker([d.lat, d.lng], {
-    radius,
-    color:'#333', weight:1, fillColor:densityColor(d.density), fillOpacity:0.82
-  }).addTo(map);
-  marker.bindPopup(`<b>${d.name}</b><br>Jumlah penduduk: ${idFmt.format(d.pop)} jiwa<br>Luas: ${decFmt.format(d.area)} km²<br>Kepadatan: <b>${idFmt.format(d.density)} jiwa/km²</b>`);
-  marker.on('click', () => selectRow(i));
-  markers.push(marker);
-});
+function useFallbackMap() {
+  if (fallbackUsed) return;
 
-function selectRow(i){
-  document.querySelectorAll('#populationTable tbody tr').forEach(r => r.style.background='');
-  const row = document.querySelector(`#populationTable tbody tr[data-index="${i}"]`);
-  if(row){ row.style.background='#fff0a8'; row.scrollIntoView({block:'nearest', behavior:'smooth'}); }
-  map.flyTo([data[i].lat, data[i].lng], 13, {duration:0.6});
-  markers[i].openPopup();
+  fallbackUsed = true;
+  map.removeLayer(activeLayer);
+  activeLayer = osmMap;
+  errorCount = 0;
+  tileSuccess = false;
+
+  updateMapStatus('Mencoba memuat peta OpenStreetMap...');
+  osmMap.addTo(map);
 }
 
-document.querySelectorAll('#populationTable tbody tr').forEach(row => {
-  row.addEventListener('click', () => selectRow(Number(row.dataset.index)));
+esriMap.on('tileload', function () {
+  tileSuccess = true;
+  updateMapStatus(
+    'Peta Kota Medan berhasil dimuat. Klik titik atau baris kecamatan untuk melihat detail.'
+  );
 });
 
-const legend = L.control({position:'bottomright'});
-legend.onAdd = function(){
-  const div = L.DomUtil.create('div','legend');
-  div.innerHTML = '<b>Kepadatan (jiwa/km²)</b><br>' +
-    '<i style="background:#2f7d5a"></i>&lt; 5.000<br>' +
-    '<i style="background:#7aa65a"></i>5.000–6.999<br>' +
-    '<i style="background:#d6b63c"></i>7.000–9.999<br>' +
-    '<i style="background:#e68a2e"></i>10.000–14.999<br>' +
-    '<i style="background:#d44a2a"></i>15.000–19.999<br>' +
-    '<i style="background:#9b1c1c"></i>≥ 20.000';
-  return div;
-};
-legend.addTo(map);
+esriMap.on('tileerror', function () {
+  errorCount++;
 
-L.control.scale({imperial:false}).addTo(map);
-</script>
-</body>
-</html>
+  if (errorCount >= 6 && !tileSuccess) {
+    useFallbackMap();
+  }
+});
+
+osmMap.on('tileload', function () {
+  updateMapStatus(
+    'Peta berhasil dimuat. Klik titik kecamatan untuk melihat informasi penduduk.'
+  );
+});
+
+let osmErrors = 0;
+
+osmMap.on('tileerror', function () {
+  osmErrors++;
+
+  if (osmErrors >= 6) {
+    updateMapStatus(
+      'Peta tidak dapat dimuat. Periksa koneksi internet atau akses server peta.'
+    );
+  }
+});
+
+// Tampilkan peta utama
+esriMap.addTo(map);
+
+setTimeout(function () {
+  if (!tileSuccess && !fallbackUsed) {
+    useFallbackMap();
+  }
+}, 5000);
+
+// Sesuaikan ukuran peta dengan tampilan browser
+setTimeout(function () {
+  map.invalidateSize(true);
+}, 500);
+
+window.addEventListener('resize', function () {
+  map.invalidateSize(true);
+});
